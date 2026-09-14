@@ -14,6 +14,9 @@ use serde_repr::{Deserialize_repr, Serialize_repr};
 
 pub(crate) mod plugin;
 
+#[cfg(any(target_env = "ohos", test))]
+mod ohos;
+
 use crate::error::*;
 
 #[cfg(target_os = "android")]
