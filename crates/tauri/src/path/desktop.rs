@@ -16,6 +16,13 @@ impl<R: Runtime> Clone for PathResolver<R> {
 }
 
 impl<R: Runtime> PathResolver<R> {
+  #[cfg(target_env = "ohos")]
+  fn ohos_app_dir(&self, directory: &str) -> Result<PathBuf> {
+    let app = crate::ohos::APP.lock().map_err(|_| Error::UnknownPath)?;
+    let base = app.as_ref().and_then(|app| app.base_path());
+    super::ohos::sandbox_dir(base.as_deref(), directory).ok_or(Error::UnknownPath)
+  }
+
   /// Returns the final component of the `Path`, if there is one.
   ///
   /// If the path is a normal file, this is the file name. If it's the path of a directory, this
@@ -236,36 +243,64 @@ impl<R: Runtime> PathResolver<R> {
   ///
   /// Resolves to [`config_dir`](Self::config_dir)`/${bundle_identifier}`.
   pub fn app_config_dir(&self) -> Result<PathBuf> {
-    dirs::config_dir()
-      .ok_or(Error::UnknownPath)
-      .map(|dir| dir.join(&self.0.config().identifier))
+    #[cfg(target_env = "ohos")]
+    {
+      self.ohos_app_dir("config")
+    }
+    #[cfg(not(target_env = "ohos"))]
+    {
+      dirs::config_dir()
+        .ok_or(Error::UnknownPath)
+        .map(|dir| dir.join(&self.0.config().identifier))
+    }
   }
 
   /// Returns the path to the suggested directory for your app's data files.
   ///
   /// Resolves to [`data_dir`](Self::data_dir)`/${bundle_identifier}`.
   pub fn app_data_dir(&self) -> Result<PathBuf> {
-    dirs::data_dir()
-      .ok_or(Error::UnknownPath)
-      .map(|dir| dir.join(&self.0.config().identifier))
+    #[cfg(target_env = "ohos")]
+    {
+      self.ohos_app_dir("")
+    }
+    #[cfg(not(target_env = "ohos"))]
+    {
+      dirs::data_dir()
+        .ok_or(Error::UnknownPath)
+        .map(|dir| dir.join(&self.0.config().identifier))
+    }
   }
 
   /// Returns the path to the suggested directory for your app's local data files.
   ///
   /// Resolves to [`local_data_dir`](Self::local_data_dir)`/${bundle_identifier}`.
   pub fn app_local_data_dir(&self) -> Result<PathBuf> {
-    dirs::data_local_dir()
-      .ok_or(Error::UnknownPath)
-      .map(|dir| dir.join(&self.0.config().identifier))
+    #[cfg(target_env = "ohos")]
+    {
+      self.ohos_app_dir("")
+    }
+    #[cfg(not(target_env = "ohos"))]
+    {
+      dirs::data_local_dir()
+        .ok_or(Error::UnknownPath)
+        .map(|dir| dir.join(&self.0.config().identifier))
+    }
   }
 
   /// Returns the path to the suggested directory for your app's cache files.
   ///
   /// Resolves to [`cache_dir`](Self::cache_dir)`/${bundle_identifier}`.
   pub fn app_cache_dir(&self) -> Result<PathBuf> {
-    dirs::cache_dir()
-      .ok_or(Error::UnknownPath)
-      .map(|dir| dir.join(&self.0.config().identifier))
+    #[cfg(target_env = "ohos")]
+    {
+      self.ohos_app_dir("cache")
+    }
+    #[cfg(not(target_env = "ohos"))]
+    {
+      dirs::cache_dir()
+        .ok_or(Error::UnknownPath)
+        .map(|dir| dir.join(&self.0.config().identifier))
+    }
   }
 
   /// Returns the path to the suggested directory for your app's log files.
@@ -276,21 +311,36 @@ impl<R: Runtime> PathResolver<R> {
   /// - **macOS:** Resolves to [`home_dir`](Self::home_dir)`/Library/Logs/${bundle_identifier}`
   /// - **Windows:** Resolves to [`local_data_dir`](Self::local_data_dir)`/${bundle_identifier}/logs`.
   pub fn app_log_dir(&self) -> Result<PathBuf> {
-    #[cfg(target_os = "macos")]
-    let path = dirs::home_dir()
-      .ok_or(Error::UnknownPath)
-      .map(|dir| dir.join("Library/Logs").join(&self.0.config().identifier));
+    #[cfg(target_env = "ohos")]
+    {
+      self.ohos_app_dir("logs")
+    }
+    #[cfg(not(target_env = "ohos"))]
+    {
+      #[cfg(target_os = "macos")]
+      let path = dirs::home_dir()
+        .ok_or(Error::UnknownPath)
+        .map(|dir| dir.join("Library/Logs").join(&self.0.config().identifier));
 
-    #[cfg(not(target_os = "macos"))]
-    let path = dirs::data_local_dir()
-      .ok_or(Error::UnknownPath)
-      .map(|dir| dir.join(&self.0.config().identifier).join("logs"));
+      #[cfg(not(target_os = "macos"))]
+      let path = dirs::data_local_dir()
+        .ok_or(Error::UnknownPath)
+        .map(|dir| dir.join(&self.0.config().identifier).join("logs"));
 
-    path
+      path
+    }
   }
 
   /// A temporary directory. Resolves to [`std::env::temp_dir`].
   pub fn temp_dir(&self) -> Result<PathBuf> {
-    Ok(std::env::temp_dir())
+    #[cfg(target_env = "ohos")]
+    {
+      // filesDir already exists; tempfile callers require an existing directory.
+      self.ohos_app_dir("")
+    }
+    #[cfg(not(target_env = "ohos"))]
+    {
+      Ok(std::env::temp_dir())
+    }
   }
 }
